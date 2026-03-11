@@ -31,3 +31,13 @@ generated-sources/
 
 oracle_instantclient/
 db2data/
+# Python virtual environment
+.venv/
+venv/
+env/
+# Python cache
+__pycache__/
+# Debezium offset files
+*.dat
+# Windows alternate data streams
+*.Zone.Identifier
