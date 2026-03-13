@@ -2,6 +2,8 @@
 
 This example demonstrates consuming Debezium CDC events in Python using **Connect mode**, where Java `SourceRecord` objects are converted directly to Python dicts via JPype (no JSON serialization overhead).
 
+> **Note:** JAR dependencies are **not** committed to this repository. They are downloaded automatically via Maven using the `setup_jars.py` script during setup.
+
 ## Key Features
 
 - **Zero JSON overhead**: Direct Java → Python conversion without serialization
@@ -40,7 +42,7 @@ This example demonstrates consuming Debezium CDC events in Python using **Connec
    python3 setup_jars.py
    ```
 
-   This downloads Debezium 3.0.0.Final JARs and installs them to the pydbzengine package.
+   This script uses Maven to download ~400 Debezium 3.0.0.Final JAR dependencies and installs them to the pydbzengine package. The JARs are intentionally not committed to the repository to keep it lightweight.
 5. **Run the example:**
 
    ```bash

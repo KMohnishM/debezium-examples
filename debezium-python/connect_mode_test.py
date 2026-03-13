@@ -160,6 +160,18 @@ def main():
     print("CONNECT MODE TEST - Zero JSON Overhead")
     print("="*80 + "\n")
     
+    # Verify JARs are installed
+    import pydbzengine
+    jar_dir = Path(pydbzengine.__file__).parent / "debezium" / "libs"
+    if not jar_dir.exists() or len(list(jar_dir.glob("*.jar"))) == 0:
+        print("❌ ERROR: Debezium JARs not found!")
+        print(f"   Expected location: {jar_dir}")
+        print("\nPlease run the setup script first:")
+        print("   python3 setup_jars.py")
+        return
+    
+    print(f"✓ Found {len(list(jar_dir.glob('*.jar')))} JAR files\n")
+    
     # Clean up old offset file
     if OFFSET_FILE.exists():
         OFFSET_FILE.unlink()
