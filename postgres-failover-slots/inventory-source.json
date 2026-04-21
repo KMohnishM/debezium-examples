@@ -9,5 +9,6 @@
     "topic.prefix" : "dbserver1",
     "schema.include.list" : "inventory",
     "plugin.name" : "pgoutput",
-    "slot.failover" : "true"
+    "slot.failover" : "true",
+    "snapshot.mode" : "when_needed"
 }
