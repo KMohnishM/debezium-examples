@@ -57,11 +57,13 @@ services:
     environment:
       PGUSER: replicator
       PGPASSWORD: zufsob-kuvtum-bImxa6
+      PGDATABASE: inventorydb
     command: |
       bash -c "
       until pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=replication_slot --host=postgres_primary --port=5432
       do
       echo 'Waiting for primary to connect...'
+      rm -rf /var/lib/postgresql/data/*
       sleep 1s
       done
       echo 'Backup done, starting replica...'
@@ -98,6 +100,7 @@ services:
      - CONFIG_STORAGE_TOPIC=my_connect_configs
      - OFFSET_STORAGE_TOPIC=my_connect_offsets
      - STATUS_STORAGE_TOPIC=my_connect_statuses
+     - OFFSET_FLUSH_INTERVAL_MS=1000
 # For testing newer connector versions, unpack the connector archive into this
 # directory and uncomment the lines below
 #    volumes:

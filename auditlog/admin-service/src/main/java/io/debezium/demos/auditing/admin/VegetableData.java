@@ -1,5 +1,8 @@
 package io.debezium.demos.auditing.admin;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class VegetableData {
 
     private Long id;
