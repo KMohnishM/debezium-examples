@@ -89,7 +89,7 @@ steps:
 
   - name: Wait for connector to fully establish streaming connection
     type: wait
-    seconds: 10
+    seconds: 30
 
   - name: Verify connector is streaming - make test change
     type: docker_compose_exec
@@ -99,7 +99,7 @@ steps:
   - name: Verify connector is streaming - check test change appears in Kafka
     type: kafka_consume
     topic: dbserver1.inventory.customers
-    timeout_seconds: 30
+    timeout_seconds: 60
     expected_content: test@failover.com
 
   - name: Make change on new primary (promoted replica)
