@@ -52,8 +52,6 @@ services:
         config.storage.replication.factor=1
         status.storage.topic=connect-status
         status.storage.replication.factor=1
-        consumer.interceptor.classes=io.opentracing.contrib.kafka.TracingConsumerInterceptor
-        producer.interceptor.classes=io.opentracing.contrib.kafka.TracingProducerInterceptor
       - JAEGER_SERVICE_NAME=kafka-connect
       - JAEGER_AGENT_HOST=jaeger
       - JAEGER_SAMPLER_TYPE=const
