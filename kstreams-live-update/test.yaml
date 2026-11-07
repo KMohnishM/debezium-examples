@@ -1,0 +1,118 @@
+name: kstreams-live-update
+description: Tests Debezium PostgreSQL CDC streaming into Kafka Streams with real-time tumbling window aggregation and live updates
+env_file: ../.env
+compose_file: docker-compose-postgres.yaml
+
+cleanup:
+  type: docker_compose_down
+  volumes: true
+
+steps:
+  - name: Ensure clean state before starting
+    type: docker_compose_down
+    volumes: true
+
+  - name: Build event-source application
+    type: local_exec
+    command: mvn clean package -f event-source/pom.xml -DskipTests
+
+  - name: Build aggregator application
+    type: local_exec
+    command: mvn clean package -f aggregator/pom.xml -DskipTests
+
+  - name: Build docker images
+    type: docker_compose_build
+    services:
+      - event-source
+      - aggregator
+
+  - name: Start infrastructure services
+    type: docker_compose_up
+    detach: true
+    services:
+      - kafka
+      - postgres
+      - connect
+
+  - name: Wait for Kafka Connect REST API to be ready
+    type: http_wait
+    url: http://localhost:8083/connectors
+    timeout_seconds: 120
+    interval_seconds: 5
+
+  - name: Register Debezium Postgres source connector
+    type: http_post
+    url: http://localhost:8083/connectors
+    body_file: pgsql-source.json
+    expected_status: [200, 201]
+
+  - name: Wait for connector to be RUNNING
+    type: http_wait
+    url: http://localhost:8083/connectors/inventory-connector/status
+    timeout_seconds: 60
+    interval_seconds: 5
+    expected_json_path: connector.state
+    expected_value: RUNNING
+
+  - name: Wait for connector task to be RUNNING
+    type: http_wait
+    url: http://localhost:8083/connectors/inventory-connector/status
+    timeout_seconds: 60
+    interval_seconds: 5
+    expected_json_path: tasks.0.state
+    expected_value: RUNNING
+
+  - name: Verify initial categories CDC topic is populated
+    type: kafka_consume
+    topic: dbserver1.inventory.categories
+    timeout_seconds: 60
+    expected_content:
+      - "Toys"
+
+  - name: Start event-source generator
+    type: docker_compose_up
+    detach: true
+    services:
+      - event-source
+
+  - name: Wait for event-source to insert orders
+    type: wait_for_log
+    service: event-source
+    expected_content: "Inserted 50 orders"
+    timeout_seconds: 60
+    interval_seconds: 5
+
+  - name: Verify orders CDC topic is populated
+    type: kafka_consume
+    topic: dbserver1.inventory.orders
+    timeout_seconds: 60
+    expected_content:
+      - "category_id"
+
+  - name: Start aggregator application
+    type: docker_compose_up
+    detach: true
+    services:
+      - aggregator
+
+  - name: Wait for aggregator Kafka Streams rebalance to RUNNING
+    type: wait_for_log
+    service: aggregator
+    expected_content: "State transition from REBALANCING to RUNNING"
+    timeout_seconds: 60
+    interval_seconds: 5
+
+  - name: Wait for aggregator liveness health check
+    type: http_wait
+    url: http://localhost:8079/q/health/live
+    timeout_seconds: 60
+    interval_seconds: 5
+    expected_json_path: status
+    expected_value: UP
+
+  - name: Verify aggregated sales_per_category output topic
+    type: kafka_consume
+    topic: sales_per_category
+    timeout_seconds: 60
+    expected_content:
+      - "."
