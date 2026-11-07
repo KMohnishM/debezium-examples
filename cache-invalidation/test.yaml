@@ -1,0 +1,27 @@
+name: cache-invalidation
+description: Tests Debezium embedded engine invalidating JPA 2nd-level cache (Infinispan) upon external PostgreSQL updates
+env_file: ../.env
+compose_file: docker-compose.yaml
+
+cleanup:
+  type: docker_compose_down
+  volumes: true
+
+steps:
+  - name: Ensure clean state before starting
+    type: docker_compose_down
+    volumes: true
+
+  - name: Start PostgreSQL container
+    type: docker_compose_up
+    detach: true
+    services:
+      - postgres
+
+  - name: Wait for PostgreSQL to be ready
+    type: wait
+    seconds: 5
+
+  - name: Run cache invalidation integration tests
+    type: local_exec
+    command: mvn test -B -Ddocker.skip=true
