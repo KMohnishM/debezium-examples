@@ -1,0 +1,135 @@
+name: kstreams
+description: Tests Debezium MySQL connector with Kafka Streams domain-driven design aggregation into MongoDB sink
+env_file: ../.env
+compose_file: docker-compose.yaml
+
+cleanup:
+  type: docker_compose_down
+  volumes: true
+
+steps:
+  - name: Ensure clean state before starting
+    type: docker_compose_down
+    volumes: true
+
+  - name: Build aggregator application
+    type: local_exec
+    command: mvn clean package -f poc-ddd-aggregates/pom.xml -DskipTests
+
+  - name: Build aggregator docker image
+    type: docker_compose_build
+    services: aggregator
+
+  - name: Build connect_sink docker image
+    type: docker_compose_build
+    services: connect_sink
+
+  - name: Start all services
+    type: docker_compose_up
+    detach: true
+
+  - name: Wait for connect_source to be ready
+    type: http_wait
+    url: http://localhost:8083/connectors
+    timeout_seconds: 90
+    interval_seconds: 3
+    expected_status: 200
+
+  - name: Wait for connect_sink to be ready
+    type: http_wait
+    url: http://localhost:8084/connectors
+    timeout_seconds: 90
+    interval_seconds: 3
+    expected_status: 200
+
+  - name: Register MySQL source connector
+    type: http_post
+    url: http://localhost:8083/connectors/
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    body_file: mysql-source.json
+    expected_status:
+      - 200
+      - 201
+
+  - name: Wait for source connector to be RUNNING
+    type: http_wait
+    url: http://localhost:8083/connectors/mysql-source/status
+    timeout_seconds: 60
+    interval_seconds: 3
+    expected_json_path: connector.state
+    expected_value: RUNNING
+
+  - name: Wait for source connector task to be RUNNING
+    type: http_wait
+    url: http://localhost:8083/connectors/mysql-source/status
+    timeout_seconds: 60
+    interval_seconds: 3
+    expected_json_path: tasks.0.state
+    expected_value: RUNNING
+
+  - name: Wait for aggregator to produce initial DDD aggregates
+    type: wait_for_log
+    service: aggregator
+    expected_content: "first_name='Sally'"
+    timeout_seconds: 60
+
+  - name: Register MongoDB sink connector
+    type: http_post
+    url: http://localhost:8084/connectors/
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    body_file: mongodb-sink.json
+    expected_status:
+      - 200
+      - 201
+
+  - name: Wait for sink connector to be RUNNING
+    type: http_wait
+    url: http://localhost:8084/connectors/mongodb-sink/status
+    timeout_seconds: 60
+    interval_seconds: 3
+    expected_json_path: connector.state
+    expected_value: RUNNING
+
+  - name: Wait for sink connector task to be RUNNING
+    type: http_wait
+    url: http://localhost:8084/connectors/mongodb-sink/status
+    timeout_seconds: 60
+    interval_seconds: 3
+    expected_json_path: tasks.0.state
+    expected_value: RUNNING
+
+  - name: Verify initial aggregated records in MongoDB sink
+    type: docker_compose_exec
+    service: mongodb
+    command: mongosh inventory --eval "db.customers_with_addresses.find()"
+    expected_content:
+      - "Sally"
+      - "Thomas"
+      - "3183 Moore Avenue"
+
+  - name: Update customer record in MySQL
+    type: docker_compose_exec
+    service: mysql
+    command: mysql -uroot -pdebezium inventory -e "UPDATE customers SET first_name = 'Sarah' WHERE id = 1001;"
+
+  - name: Wait for aggregator to process update
+    type: wait_for_log
+    service: aggregator
+    expected_content: "first_name='Sarah'"
+    timeout_seconds: 60
+
+  - name: Verify updated record in MongoDB sink
+    type: docker_compose_exec
+    service: mongodb
+    command: mongosh inventory --eval "db.customers_with_addresses.find()"
+    expected_content:
+      - "Sarah"
+      - "Thomas"
+
+  - name: Tear down services
+    type: docker_compose_down
+    volumes: true

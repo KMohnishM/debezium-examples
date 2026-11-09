@@ -6,14 +6,17 @@ sink the aggregated change events into MongoDB, using the [Kafka Connect MongoDB
 ## Preparations
 
 ```shell
+# Build aggregator application
+mvn clean package -f poc-ddd-aggregates/pom.xml -DskipTests
+
 # Start Kafka, Kafka Connect, a MySQL and a MongoDB database and the aggregator
-docker-compose --env-file ../.env up --build
+docker compose --env-file ../.env up --build -d
 
 # Start MySQL connector
-curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @mysql-source.json
+curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8083/connectors/ -d @mysql-source.json
 
 # Start MongoDB sink connector
-curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8084/connectors/ -d @mongodb-sink.json
+curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8084/connectors/ -d @mongodb-sink.json
 ```
 
 # Consume aggregated messages
@@ -21,7 +24,7 @@ curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json"
 Browse the Kafka topic:
 
 ```shell
-docker-compose exec kafka /kafka/bin/kafka-console-consumer.sh \
+docker compose --env-file ../.env exec -T kafka /kafka/bin/kafka-console-consumer.sh \
     --bootstrap-server kafka:9092 \
     --from-beginning \
     --property print.key=true \
@@ -31,23 +34,19 @@ docker-compose exec kafka /kafka/bin/kafka-console-consumer.sh \
 Examine the target collection in the MongoDB sink database:
 
 ```shell
-docker-compose exec mongodb bash -c 'mongo inventory'
-
-> db.customers_with_addresses.find().pretty()
+docker compose --env-file ../.env exec -T mongodb mongosh inventory --eval "db.customers_with_addresses.find().pretty()"
 ```
 
 # Modify records in the source database via MySQL client
 
 ```shell
-docker-compose exec mysql bash -c 'mysql -u $MYSQL_USER -p$MYSQL_PASSWORD inventory'
-
-mysql> update customers set first_name= "Sarah" where id = 1001;
+docker compose --env-file ../.env exec -T mysql mysql -uroot -pdebezium inventory -e 'UPDATE customers SET first_name = "Sarah" WHERE id = 1001;'
 ```
 
-The corresponding aggregate should be updated inMongoDB.
+The corresponding aggregate should be updated in MongoDB.
 
 # Shut down the cluster
 
 ```shell
-docker-compose --env-file ../.env down
+docker compose --env-file ../.env down -v
 ```
