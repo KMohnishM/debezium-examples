@@ -1,0 +1,62 @@
+name: apache-pulsar
+description: Tests Debezium embedded engine streaming PostgreSQL changes to Apache Pulsar
+
+env_file: ../.env
+compose_file: docker-compose.yaml
+
+cleanup:
+  - name: Stop the PulsarProducer background process
+    type: local_exec
+    command: pkill -f "[a]pache-pulsar.*jar-with-dependencies.jar" || true
+
+  - name: Remove stale offsets file
+    type: local_exec
+    command: rm -f offset.dat
+
+  - name: Stop containers and clean volumes
+    type: docker_compose_down
+    volumes: true
+
+steps:
+  - name: Ensure clean state before starting
+    type: docker_compose_down
+    volumes: true
+
+  - name: Build the apache-pulsar project
+    type: local_exec
+    command: mvn package -DskipTests -B
+
+  - name: Start Postgres and Pulsar services
+    type: docker_compose_up
+    detach: true
+
+  - name: Wait for Postgres to be ready
+    type: docker_compose_exec
+    service: postgres
+    command: "until pg_isready -U postgres -d postgres; do sleep 1; done"
+
+  - name: Wait for Pulsar to be ready
+    type: wait
+    seconds: 15
+
+  - name: Remove stale offsets file
+    type: local_exec
+    command: rm -f offset.dat
+
+  - name: Run PulsarProducer embedded engine application in the background
+    type: local_exec
+    command: java -jar target/apache-pulsar-1.0-SNAPSHOT-jar-with-dependencies.jar > app.log 2>&1 &
+
+  - name: Wait for Debezium engine snapshot and streaming
+    type: wait
+    seconds: 30
+
+  - name: Verify topics created in Pulsar
+    type: docker_compose_exec
+    service: pulsar
+    command: bin/pulsar-admin topics list public/default
+    expected_content: "test.inventory.customers"
+
+  - name: Stop PulsarProducer background process
+    type: local_exec
+    command: pkill -f "[a]pache-pulsar.*jar-with-dependencies.jar" || true

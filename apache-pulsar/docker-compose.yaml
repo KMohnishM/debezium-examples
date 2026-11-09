@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: quay.io/debezium/example-postgres:${DEBEZIUM_VERSION:-latest}
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    healthcheck:
+      test: "pg_isready -U postgres -d postgres"
+      interval: 2s
+      timeout: 20s
+      retries: 10
+
+  pulsar:
+    image: apachepulsar/pulsar:2.11.0
+    command: "bin/pulsar standalone"
+    ports:
+      - 6650:6650
+      - 8080:8080
